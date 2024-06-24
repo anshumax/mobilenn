@@ -25,6 +25,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.activity.result.ActivityResultLauncher;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.android.material.snackbar.Snackbar;
 import com.qualcomm.qti.snpe.FloatTensor;
@@ -64,6 +65,7 @@ public class TestCameraActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.test_camera_activity);
 
@@ -123,6 +125,16 @@ public class TestCameraActivity extends AppCompatActivity {
                 });
             });
         });
+        SwipeRefreshLayout swipeRefreshLayout = findViewById(R.id.swipe);
+        swipeRefreshLayout.setOnRefreshListener(() -> {
+            runOnUiThread(() -> spinner.setVisibility(View.VISIBLE));
+            new Handler().postDelayed(() -> {
+                buildModel();
+                image = null;
+                clickImageView.setImageBitmap(null);
+                swipeRefreshLayout.setRefreshing(false);
+            }, 4000);
+        });
 
 
     }
@@ -156,48 +168,52 @@ public class TestCameraActivity extends AppCompatActivity {
     protected void onStart() {
         super.onStart();
         if(Objects.isNull(neuralNetwork)){
-            spinner = findViewById(R.id.pb);
-            spinner.setVisibility(View.VISIBLE);
-            Thread thread = new Thread(() -> {
-                try {
-                    Log.i(TAG, "Creating new cached model file");
-
-                    File cachedModelFile = new File(getApplicationContext().getCacheDir(), "quantized_deeplab.dlc");
-                    Files.deleteIfExists(cachedModelFile.toPath());
-
-
-                    for (String path : this.getAssets().list("")) {
-                        Log.i(TAG, "Path -> " + path);
-                    }
-
-                    Log.i(TAG, "Copying data to new cached model");
-                    int i = 0;
-                    InputStream inputStream = getAssets().open("deeplabv3.dlc");
-                    int size = inputStream.available();
-                    byte[] buffer = new byte[size];
-                    inputStream.read(buffer);
-                    Files.write(cachedModelFile.toPath(), buffer);
-
-                    Log.i(TAG, "Cached file has size " + Files.size(cachedModelFile.toPath()) + " bytes");
-                    Log.i(TAG, "Building model from cached file");
-                    SNPE.NeuralNetworkBuilder builder = new
-                            SNPE.NeuralNetworkBuilder(getApplication())
-                            .setRuntimeOrder(NeuralNetwork.Runtime.DSP, NeuralNetwork.Runtime.GPU, NeuralNetwork.Runtime.CPU)
-                            .setModel(cachedModelFile);
-
-                    neuralNetwork = builder.build();
-
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-                Log.i(TAG, "Model built");
-                runOnUiThread(() -> {
-                    spinner.setVisibility(View.GONE);
-                    Toast.makeText(TestCameraActivity.this.getApplicationContext(), "Model built", Toast.LENGTH_LONG).show();
-                });
-            });
-            thread.start();
+            buildModel();
         }
+    }
+
+    private void buildModel(){
+        spinner = findViewById(R.id.pb);
+        runOnUiThread(() -> spinner.setVisibility(View.VISIBLE));
+        Thread thread = new Thread(() -> {
+            try {
+                Log.i(TAG, "Creating new cached model file");
+
+                File cachedModelFile = new File(getApplicationContext().getCacheDir(), "quantized_deeplab.dlc");
+                Files.deleteIfExists(cachedModelFile.toPath());
+
+
+                for (String path : this.getAssets().list("")) {
+                    Log.i(TAG, "Path -> " + path);
+                }
+
+                Log.i(TAG, "Copying data to new cached model");
+                int i = 0;
+                InputStream inputStream = getAssets().open("deeplabv3.dlc");
+                int size = inputStream.available();
+                byte[] buffer = new byte[size];
+                inputStream.read(buffer);
+                Files.write(cachedModelFile.toPath(), buffer);
+
+                Log.i(TAG, "Cached file has size " + Files.size(cachedModelFile.toPath()) + " bytes");
+                Log.i(TAG, "Building model from cached file");
+                SNPE.NeuralNetworkBuilder builder = new
+                        SNPE.NeuralNetworkBuilder(getApplication())
+                        .setRuntimeOrder(NeuralNetwork.Runtime.DSP, NeuralNetwork.Runtime.GPU, NeuralNetwork.Runtime.CPU)
+                        .setModel(cachedModelFile);
+
+                neuralNetwork = builder.build();
+
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            Log.i(TAG, "Model built");
+            runOnUiThread(() -> {
+                spinner.setVisibility(View.GONE);
+                Toast.makeText(TestCameraActivity.this.getApplicationContext(), "Model built", Toast.LENGTH_LONG).show();
+            });
+        });
+        thread.start();
     }
 
     private void inferenceOnBitmap(Bitmap bitmap) {

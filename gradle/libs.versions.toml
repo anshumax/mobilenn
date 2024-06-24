@@ -10,6 +10,7 @@ material = "1.10.0"
 activity = "1.8.0"
 constraintlayout = "2.1.4"
 supportAnnotations = "28.0.0"
+swiperefreshlayout = "1.1.0"
 
 [libraries]
 activity-v190 = { module = "androidx.activity:activity", version.ref = "activityVersion" }
@@ -22,6 +23,7 @@ material = { group = "com.google.android.material", name = "material", version.r
 activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
 constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
 support-annotations = { module = "com.android.support:support-annotations", version.ref = "supportAnnotations" }
+swiperefreshlayout = { module = "androidx.swiperefreshlayout:swiperefreshlayout", version.ref = "swiperefreshlayout" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
