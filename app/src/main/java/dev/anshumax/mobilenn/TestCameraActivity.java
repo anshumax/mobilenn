@@ -38,19 +38,25 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Timer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class TestCameraActivity extends AppCompatActivity {
     private final String TAG = TestCameraActivity.class.getName();
-    final String MNETSSD_OUTPUT_LAYER = "ArgMax:0";
-    final String MNETSSD_INPUT_LAYER = "sub_7:0";
-    final int BITMAP_WIDTH = 513;
-    final int BITMAP_HEIGHT = 513;
+    String modelFileName = "mobilenet_ssd.dlc";
+//    final String MNETSSD_OUTPUT_LAYER = "ArgMax:0";
+    final String MNETSSD_OUTPUT_LAYER = "detection_classes:0";
+//    final String MNETSSD_INPUT_LAYER = "sub_7:0";
+    final String MNETSSD_INPUT_LAYER = "Preprocessor/sub:0";
+    final int BITMAP_WIDTH = 300;
+    final int BITMAP_HEIGHT = 300;
     final int BITMAP_DEPTH = 3;
     int MNETSSD_NUM_BOXES = BITMAP_WIDTH * BITMAP_HEIGHT;
 
@@ -179,7 +185,7 @@ public class TestCameraActivity extends AppCompatActivity {
             try {
                 Log.i(TAG, "Creating new cached model file");
 
-                File cachedModelFile = new File(getApplicationContext().getCacheDir(), "quantized_deeplab.dlc");
+                File cachedModelFile = new File(getApplicationContext().getCacheDir(), modelFileName);
                 Files.deleteIfExists(cachedModelFile.toPath());
 
 
@@ -189,7 +195,7 @@ public class TestCameraActivity extends AppCompatActivity {
 
                 Log.i(TAG, "Copying data to new cached model");
                 int i = 0;
-                InputStream inputStream = getAssets().open("deeplabv3.dlc");
+                InputStream inputStream = getAssets().open(modelFileName);
                 int size = inputStream.available();
                 byte[] buffer = new byte[size];
                 inputStream.read(buffer);
@@ -221,9 +227,13 @@ public class TestCameraActivity extends AppCompatActivity {
         int originalBitmapH = bitmap.getHeight();
         int originalBitmapW = bitmap.getWidth();
         Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmap, BITMAP_WIDTH, BITMAP_HEIGHT, false);
-        final float[] floatOutput = new float[MNETSSD_NUM_BOXES];
+
         try {
+            for(Map.Entry<String, int[]> inputTensors: neuralNetwork.getInputTensorsShapes().entrySet()){
+                Log.d(TAG, "Input tensors key " + inputTensors.getKey() + " with value " + inputTensors.getValue().length);
+            }
             int[] mInputTensorShapeHWC = neuralNetwork.getInputTensorsShapes().get(MNETSSD_INPUT_LAYER);
+            Log.d(TAG, "Input tensor shape array is null: " + Objects.isNull(mInputTensorShapeHWC));
             Map<String, int[]> tensorShapes = neuralNetwork.getInputTensorsShapes();
             for(Map.Entry<String, int[]> entry: tensorShapes.entrySet()){
                 Log.i(TAG, entry.getKey() + " -> " + entry.getValue().length);
@@ -256,11 +266,24 @@ public class TestCameraActivity extends AppCompatActivity {
             mInputTensorReused.write(inputFloatsHW3, 0, inputFloatsHW3.length, 0, 0);
             // execute the inference
             Map<String, FloatTensor> outputs = neuralNetwork.execute(mInputTensorsMap);
+            for(String outputTensorName:neuralNetwork.getOutputTensorsNames()){
+                Log.d(TAG, "Output tensor name: " + outputTensorName);
+            }
+
+            for(Map.Entry<String,FloatTensor> output:outputs.entrySet()){
+                FloatTensor outputTensor = output.getValue();
+                Log.d(TAG, "Output Map entry key: " + output.getKey() + " with shape " + Arrays.toString(outputTensor.getShape()) + " and size " + outputTensor.getSize());
+            }
 
             if (outputs != null) {
-                MNETSSD_NUM_BOXES = outputs.get(MNETSSD_OUTPUT_LAYER).getSize();
+                FloatTensor outputFloatTensor = outputs.get(MNETSSD_OUTPUT_LAYER);
+                final float[] floatOutput = new float[outputFloatTensor.getSize()];
+                MNETSSD_NUM_BOXES = outputFloatTensor.getSize();
                 // convert tensors to boxes - Note: Optimized to read-all upfront
-                outputs.get(MNETSSD_OUTPUT_LAYER).read(floatOutput, 0, MNETSSD_NUM_BOXES);
+                outputFloatTensor.read(floatOutput, 0, MNETSSD_NUM_BOXES);
+                Log.d(TAG, "Output array length: " + floatOutput.length);
+                Log.d(TAG, "Output: " + Arrays.toString(floatOutput));
+
                 //for black/white image
                 int w = scaledBitmap.getWidth();
                 int h = scaledBitmap.getHeight();
